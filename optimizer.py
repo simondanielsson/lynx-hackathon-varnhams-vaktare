@@ -52,16 +52,35 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
     # for result replication
     np.random.seed(1)
 
-    n_assets = datas['prices'].shape[1]
+    # exclude date column
+    n_assets = datas['prices'].shape[1] - 1
 
     positions = []
-    for args in zip(
+    for (
+        predicted_prices_next,
+        real_prices_yesterday,
+        covariance_matrix,
+    ) in zip(
         datas['predicted_prices'].iterrows(),
         datas['prices'].iterrows(),
         datas['covariance'],
     ):
+        #if not all(args):
+        #    continue
         # random uniform initialization around 0
         x0 = np.random.rand(n_assets)
+        date = predicted_prices_next[0]
+
+        # make sure dates are aligned
+        assert date == real_prices_yesterday[1].to_numpy()[0]
+
+        covariance_matrix_np = np.array([vals[1:] for vals in covariance_matrix.to_numpy()])
+
+        args = (
+            predicted_prices_next[1],
+            real_prices_yesterday[1].to_numpy()[1:], # remove date column
+            covariance_matrix_np,
+        )
 
         position = scipy.optimize.minimize(
             _neg_predicted_sharpe_ratio_tomorrow,
@@ -71,9 +90,17 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
         )
 
         if not position.success:
-            _log.warning(f"Position optimizer did not converge for date {args[1]['date']}")
+            _log.info(f"Position optimizer did not converge for date {date}")
 
-        positions.append(position.x)
+        position_np = np.array(position.x).reshape(1, -1)
+
+        position_series = pd.DataFrame(position_np, columns=datas['prices'].columns[1:] , index=[date])
+
+        positions.append(position_series)
+
+    return pd.concat(
+        positions,
+    )
 
 
 def _neg_predicted_sharpe_ratio_tomorrow(

@@ -23,8 +23,9 @@ def get_covariance(covariance_model_name: str, datas: abc.Mapping[str, pd.DataFr
 
 def naive_covariance(datas, **kwargs):
     cov_window_size = kwargs.get('cov_window_size')
-    df = datas['prices']
-    covariances = df.rolling(cov_window_size).cov().shift(-1)
+    df = datas['prices'].set_index('dates')
+    # TODO: check where to do shift (1)
+    covariances = df.rolling(cov_window_size).cov()#.shift(-1)
     matrices = []
     for date, new_df in covariances.reset_index(level=[0,1]).groupby('dates'):
         new_df.drop(columns=new_df.columns[0], axis=1, inplace=True)

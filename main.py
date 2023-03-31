@@ -82,9 +82,9 @@ if __name__ == '__main__':
     'sharpe_optimizer'
     """
 
-    pricing_model_name = ""
-    covariance_model_name = ""
-    position_model_name = ""
+    pricing_model_name = 'rolling_mean_price'
+    covariance_model_name = 'naive'
+    position_model_name = 'sharpe_optimizer'
     save_path = None
 
     # add hyperparameters here! Make sure there are no name collisions
@@ -92,7 +92,7 @@ if __name__ == '__main__':
         'vol_window': 50,
         'trend_window': 100,
         'price_window_size': 10,
-        'cov_window_size' : 20
+        'cov_window_size': 20,
     }
 
     sys.exit(
