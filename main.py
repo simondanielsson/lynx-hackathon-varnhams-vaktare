@@ -21,21 +21,29 @@ _log = logging.getLogger(__name__)
 _log.setLevel(logging.INFO)
 
 
-def main(pricing_model_name: str, covariance_model_name: str, save_path: Optional[str] = None) -> int:
+def main(
+    pricing_model_name: str,
+    covariance_model_name: str,
+    save_path: Optional[str] = None,
+    **kwargs,
+) -> int:
     datas: Dict[str, pd.DataFrame] = _load_data()
 
     datas['predicted_prices'] = get_prices(
         pricing_model_name=pricing_model_name,
         datas=datas,
+        **kwargs,
     )
 
     datas['covariance'] = get_covariance(
         covariance_model_name=covariance_model_name,
         datas=datas,
+        **kwargs,
     )
 
     positions = get_positions(
         datas=datas,
+        **kwargs,
     )
 
     _save(positions)
@@ -62,7 +70,14 @@ def _save(positions: pd.DataFrame, save_path: Optional[str]) -> None:
 if __name__ == '__main__':
     pricing_model_name = ""
     covariance_model_name = ""
+    save_path = None
+
+    # add hyperparameters here! Make sure there are no name collisions
+    kwargs = {
+        'vol_window': 50,
+        'trend_window': 100,
+    }
 
     sys.exit(
-        main(pricing_model_name, covariance_model_name)
+        main(pricing_model_name, covariance_model_name, **kwargs)
     )
