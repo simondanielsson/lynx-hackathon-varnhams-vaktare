@@ -76,6 +76,7 @@ if __name__ == '__main__':
     kwargs = {
         'vol_window': 50,
         'trend_window': 100,
+        'price_window_size': 10,
     }
 
     sys.exit(
