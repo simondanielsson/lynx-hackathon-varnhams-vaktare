@@ -77,6 +77,7 @@ if __name__ == '__main__':
         'vol_window': 50,
         'trend_window': 100,
         'price_window_size': 10,
+        'cov_window_size' : 20
     }
 
     sys.exit(
