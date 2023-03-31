@@ -1,13 +1,17 @@
+import json
 import sys
 from collections import abc
-from typing import Dict, Optional
+from datetime import datetime
+from typing import Dict
 import logging
 
 import pandas as pd
-import evaluation
+import matplotlib.pyplot as plt
 
+import evaluation
 from covariance_model import get_covariance
 from optimizer import get_positions
+from predictions import PREDICTIONS_PATH
 from price_model import get_prices
 
 # TODO: fill in
@@ -24,7 +28,7 @@ def main(
     pricing_model_name: str,
     covariance_model_name: str,
     position_model_name: str,
-    save_path: Optional[str] = None,
+    do_save: bool = False,
     **kwargs,
 ) -> int:
     _log.info(
@@ -52,7 +56,18 @@ def main(
         **kwargs,
     )
 
-    _save_results(positions=positions, save_path=save_path)
+    save_metadata = {
+        'pricing_model_name': pricing_model_name,
+        'covariance_model_name': covariance_model_name,
+        'position_model_name': position_model_name,
+        'hparams': kwargs,
+    }
+    _save_results(
+        positions=positions,
+        datas=datas,
+        do_save=do_save,
+        save_metadata=save_metadata,
+    )
 
     return 0
 
@@ -66,14 +81,36 @@ def _load_data() -> abc.Mapping[str, pd.DataFrame]:
     }
 
 
-def _save_results(positions: pd.DataFrame, save_path: Optional[str]) -> None:
-    """Save positions to disk."""
-    if not save_path:
-        _log.info(f'Skipped saving positions to disk, as `save_path` is {save_path}')
+def _save_results(positions: pd.DataFrame, datas: abc.Mapping, do_save: bool, save_metadata: abc.Mapping) -> None:
+    """Save positions to disk.
+
+    NOTE: to load this csv file properly, for instance when used
+    with `evaluation.plot_key_figures`, run
+
+      `pd.read_csv(file_name, index_col='dates', parse_dates=['dates'])`.
+    """
+    if not do_save:
+        _log.info(f'Skipped saving positions to disk, as `save_path` is {do_save}')
         return
 
-    _log.info(f'Saving positions to {save_path}')
-    positions.to_csv(save_path, index_label='dates')
+    # prepare for prediction directory
+    current_time = datetime.strftime(datetime.now(), format="%H%M")
+    save_dir = (
+        PREDICTIONS_PATH /
+        f"{current_time}-{save_metadata['pricing_model_name']}-"
+        f"{save_metadata['covariance_model_name']}-{save_metadata['position_model_name']}"
+    )
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    _log.info(f'Saving positions and metadata to {save_dir}')
+    positions.to_csv(save_dir / 'positions.csv', index_label='dates')
+    with open(save_dir / 'hyperparams.json', 'w') as fp:
+        json.dump(save_metadata, fp)
+
+    # Performance panel
+    prices = datas['prices'].set_index('dates')
+    evaluation.plot_key_figures(positions, prices)
+    plt.savefig(save_dir / 'performance_summary.png')
 
 
 if __name__ == '__main__':
@@ -92,7 +129,7 @@ if __name__ == '__main__':
     pricing_model_name = 'rolling_mean_price'
     covariance_model_name = 'naive'
     position_model_name = 'sharpe_optimizer'
-    save_path = 'predictions/first_pred.csv'
+    do_save = True
 
     # add hyperparameters here! Make sure there are no name collisions
     kwargs = {
@@ -107,7 +144,7 @@ if __name__ == '__main__':
             pricing_model_name=pricing_model_name,
             covariance_model_name=covariance_model_name,
             position_model_name=position_model_name,
-            save_path=save_path,
+            do_save=do_save,
             **kwargs,
         )
     )

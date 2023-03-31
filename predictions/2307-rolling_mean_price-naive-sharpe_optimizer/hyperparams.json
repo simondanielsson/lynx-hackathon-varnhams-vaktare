@@ -1,0 +1,1 @@
+{"pricing_model_name": "rolling_mean_price", "covariance_model_name": "naive", "position_model_name": "sharpe_optimizer", "hparams": {"vol_window": 50, "trend_window": 100, "price_window_size": 10, "cov_window_size": 20}}
