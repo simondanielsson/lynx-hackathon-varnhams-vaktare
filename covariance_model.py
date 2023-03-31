@@ -8,7 +8,7 @@ import scipy
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.INFO)
 
-def get_covariance(covariance_model_name: str, datas: abc.Mapping[str, pd.DataFrame]) -> np.array:
+def get_covariance(covariance_model_name: str, datas: abc.Mapping[str, pd.DataFrame]) -> pd.DataFrame:
     """Get the covariance for a """
     covariance_model = COVARIANCE_MODELS.get(covariance_model_name)
 
@@ -24,4 +24,8 @@ def get_covariance(covariance_model_name: str, datas: abc.Mapping[str, pd.DataFr
 
 COVARIANCE_MODELS = {
     # name: cov_function
+    'naive' : naive_covariance
 }
+
+def naive_covariance(datas):
+  return datas['prices'].cov() # Hard coded to prices for now :)
