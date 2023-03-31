@@ -16,7 +16,7 @@ def get_covariance(covariance_model_name: str, datas: abc.Mapping[str, pd.DataFr
         raise ValueError(f'No covariance model with name {covariance_model_name},'
                          f' not in {COVARIANCE_MODELS.keys()}.')
 
-    _log.info(f'Calculating asset covariances using {covariance_model_name}...')
+    _log.info(f'Calculating asset covariances using strategy `{covariance_model_name}`...')
 
     return covariance_model(datas, **kwargs)
 

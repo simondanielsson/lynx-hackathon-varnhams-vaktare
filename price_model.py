@@ -18,7 +18,7 @@ def get_prices(pricing_model_name: str, datas: abc.Mapping[str, pd.DataFrame], *
     if not pricing_model:
         raise ValueError(f'No model name with name {pricing_model_name}, not in {PRICING_MODELS.keys()}.')
 
-    _log.info(f'Predicting prices using model type {pricing_model_name}')
+    _log.info(f'Predicting prices using model type `{pricing_model_name}`')
 
     return pricing_model(datas, **kwargs)
 

@@ -4,9 +4,7 @@ from typing import Dict, Optional
 import logging
 
 import pandas as pd
-import numpy as np
 import evaluation
-import scipy
 
 from covariance_model import get_covariance
 from optimizer import get_positions
@@ -18,6 +16,7 @@ NAMES_TO_FILE_NAMES = {
 }
 
 _log = logging.getLogger(__name__)
+logging.basicConfig()
 _log.setLevel(logging.INFO)
 
 
@@ -28,6 +27,11 @@ def main(
     save_path: Optional[str] = None,
     **kwargs,
 ) -> int:
+    _log.info(
+        f'Launching trading strategy with the following config\n\tPricing model:{pricing_model_name}'
+        f'\n\tCovariance mode: {covariance_model_name}\n\tPosition model: {position_model_name}\n\t'
+        f"Hyperparameters: {'; '.join(f'{name}={value}'for name, value in kwargs.items())}"
+    )
     datas: Dict[str, pd.DataFrame] = _load_data()
 
     datas['predicted_prices'] = get_prices(
@@ -48,25 +52,28 @@ def main(
         **kwargs,
     )
 
-    _save(positions)
+    _save_results(positions=positions, save_path=save_path)
 
     return 0
 
 
 def _load_data() -> abc.Mapping[str, pd.DataFrame]:
     """Load data from files."""
-    _log.info(f'Loading data from {NAMES_TO_FILE_NAMES.keys()}')
+    _log.info(f'Loading data from {set(NAMES_TO_FILE_NAMES.keys())}')
     return {
         name: pd.read_csv(file_name)
         for name, file_name in NAMES_TO_FILE_NAMES.items()
     }
 
 
-def _save(positions: pd.DataFrame, save_path: Optional[str]) -> None:
+def _save_results(positions: pd.DataFrame, save_path: Optional[str]) -> None:
+    """Save positions to disk."""
+    if not save_path:
+        _log.info(f'Skipped saving positions to disk, as `save_path` is {save_path}')
+        return
 
-    if save_path:
-        _log.info(f'Saving positions to {save_path}')
-        positions.to_csv(save_path)
+    _log.info(f'Saving positions to {save_path}')
+    positions.to_csv(save_path, index_label='dates')
 
 
 if __name__ == '__main__':
@@ -85,7 +92,7 @@ if __name__ == '__main__':
     pricing_model_name = 'rolling_mean_price'
     covariance_model_name = 'naive'
     position_model_name = 'sharpe_optimizer'
-    save_path = None
+    save_path = 'predictions/first_pred.csv'
 
     # add hyperparameters here! Make sure there are no name collisions
     kwargs = {
@@ -97,9 +104,10 @@ if __name__ == '__main__':
 
     sys.exit(
         main(
-            pricing_model_name,
-            covariance_model_name,
-            position_model_name,
+            pricing_model_name=pricing_model_name,
+            covariance_model_name=covariance_model_name,
+            position_model_name=position_model_name,
+            save_path=save_path,
             **kwargs,
         )
     )

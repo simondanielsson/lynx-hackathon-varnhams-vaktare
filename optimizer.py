@@ -1,10 +1,13 @@
 from collections import abc
 import logging
-from typing import List
+from typing import List, Tuple
 
 import pandas as pd
 import numpy as np
 import scipy
+from tqdm import tqdm
+
+from utils import timing
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.INFO)
@@ -15,11 +18,12 @@ def get_positions(position_model_name: str, datas: abc.Mapping[str, pd.DataFrame
     :param datas:
     :return: dataframe with positions for each asset for every date.
     """
-    _log.info('Calculating positions...')
     position_model = POSITION_MODELS.get(position_model_name)
 
     if not position_model:
         raise ValueError(f'No model name with name {position_model}, not in {POSITION_MODELS.keys()}.')
+
+    _log.info(f"Calculating positions using strategy `{position_model_name}`")
 
     return position_model(datas, **kwargs)
 
@@ -47,6 +51,7 @@ def lynx_sign_model(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.DataF
     return pos
 
 
+@timing
 def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.DataFrame:
     """Optimize positions using predicted prices and historical asset price covariances."""
     # for result replication
@@ -55,52 +60,90 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
     # exclude date column
     n_assets = datas['prices'].shape[1] - 1
 
+    # display how many dates first were skipped
+    n_date_skips = 0
+    check_nans = True
+
+    # track failed convergences
+    failed_count = 0
+
     positions = []
     for (
         predicted_prices_next,
         real_prices_yesterday,
         covariance_matrix,
-    ) in zip(
+    ) in tqdm(zip(
         datas['predicted_prices'].iterrows(),
         datas['prices'].iterrows(),
         datas['covariance'],
-    ):
-        #if not all(args):
-        #    continue
-        # random uniform initialization around 0
-        x0 = np.random.rand(n_assets)
-        date = predicted_prices_next[0]
+    ), total=len(datas['prices'])):
+        real_prices_yesterday_np = real_prices_yesterday[1].to_numpy()
 
-        # make sure dates are aligned
-        assert date == real_prices_yesterday[1].to_numpy()[0]
+        # make sure predicted and real dates are aligned
+        _verify_date(predicted_prices_next, real_prices_yesterday_np)
 
-        covariance_matrix_np = np.array([vals[1:] for vals in covariance_matrix.to_numpy()])
+        covariance_matrix_np = covariance_matrix.set_index('level_1').to_numpy()
 
-        args = (
-            predicted_prices_next[1],
-            real_prices_yesterday[1].to_numpy()[1:], # remove date column
+        optimization_args = (
+            predicted_prices_next[1].to_numpy(),
+            real_prices_yesterday_np[1:].astype(dtype=np.float64),  # remove date column
             covariance_matrix_np,
         )
+
+        # skip if any of the inputs contains nan's; if so, the window
+        # sizes prevents us for predicting one these dates
+        if check_nans:
+            if _any_contains_nan(optimization_args):
+                n_date_skips += 1
+                continue
+
+        if n_date_skips and check_nans:
+            check_nans = False
+            _log.info(f'Skipped the {n_date_skips} first dates in optimizer.'
+                      f' Make sure this aligns with the maximal window size')
+
+        # random uniform position initialization in [-1, 1]
+        x0 = np.random.rand(n_assets) * 2 - 1
 
         position = scipy.optimize.minimize(
             _neg_predicted_sharpe_ratio_tomorrow,
             x0=x0,
-            args=args,
+            args=optimization_args,
             #bounds=[(-1, 1), (-1, 1)],
         )
 
         if not position.success:
-            _log.info(f"Position optimizer did not converge for date {date}")
+            failed_count += 1
+            #
 
         position_np = np.array(position.x).reshape(1, -1)
 
-        position_series = pd.DataFrame(position_np, columns=datas['prices'].columns[1:] , index=[date])
+        position_df = pd.DataFrame(position_np, columns=datas['prices'].columns[1:], index=[predicted_prices_next[0]])
 
-        positions.append(position_series)
+        positions.append(position_df)
 
+    _track_progress(failed_count=failed_count, total_count=len(datas['prices']))
+    # indexed by date
     return pd.concat(
         positions,
     )
+
+
+def _verify_date(predicted_prices_next: List, real_prices_yesterday_np: np.array) -> None:
+    predicted_price_date = predicted_prices_next[0]
+    real_prices_date = real_prices_yesterday_np[0]
+    assert predicted_price_date == real_prices_date
+
+
+def _any_contains_nan(args: Tuple[np.array]) -> bool:
+    return any(np.isnan(arg).any() for arg in args)
+
+
+def _track_progress(failed_count: int, total_count: int) -> None:
+    if failed_count:
+        _log.info(f"Position optimizer did not converge for {failed_count} / {total_count} dates")
+    else:
+        _log.info(f"Optimizer converged for all dates!")
 
 
 def _neg_predicted_sharpe_ratio_tomorrow(
