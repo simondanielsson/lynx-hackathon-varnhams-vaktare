@@ -1,0 +1,9 @@
+fqdn==1.5.1
+ipympl==0.9.3
+isoduration==20.11.0
+jsonpointer==2.3
+jupyterlab==3.6.2
+pandas==1.5.3
+pip-chill==1.0.1
+uri-template==1.2.0
+webcolors==1.13
