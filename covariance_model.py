@@ -18,7 +18,7 @@ def get_covariance(covariance_model_name: str, datas: abc.Mapping[str, pd.DataFr
 
     _log.info(f'Calculating asset covariances using {covariance_model_name}...')
 
-    return covariance_model(datas)
+    return covariance_model(datas, **kwargs)
 
 
 
@@ -28,9 +28,9 @@ COVARIANCE_MODELS = {
 }
 
 def naive_covariance(datas, **kwargs):
-  return datas['prices'].cov() # Hard coded to prices for now :)
+  cov_window_size = kwargs.get('cov_window_size')
   df = datas['prices']
-  covariances = df.rolling(window_size).cov().shift(-1)
+  covariances = df.rolling(cov_window_size).cov().shift(-1)
   matrices = []
   for date, new_df in covariances.reset_index(level=[0,1]).groupby('dates'):
       new_df.drop(columns=new_df.columns[0], axis=1, inplace=True)
