@@ -24,6 +24,7 @@ _log.setLevel(logging.INFO)
 def main(
     pricing_model_name: str,
     covariance_model_name: str,
+    position_model_name: str,
     save_path: Optional[str] = None,
     **kwargs,
 ) -> int:
@@ -42,6 +43,7 @@ def main(
     )
 
     positions = get_positions(
+        position_model_name=position_model_name,
         datas=datas,
         **kwargs,
     )
@@ -68,8 +70,21 @@ def _save(positions: pd.DataFrame, save_path: Optional[str]) -> None:
 
 
 if __name__ == '__main__':
+    """
+    PRICE MODELS:
+    'rolling_mean_price'
+    
+    COVARIANCE MODELS:
+    'naive'
+    
+    POSITION MODELS:
+    'lynx_sign_model'
+    'sharpe_optimizer'
+    """
+
     pricing_model_name = ""
     covariance_model_name = ""
+    position_model_name = ""
     save_path = None
 
     # add hyperparameters here! Make sure there are no name collisions
@@ -81,5 +96,10 @@ if __name__ == '__main__':
     }
 
     sys.exit(
-        main(pricing_model_name, covariance_model_name, **kwargs)
+        main(
+            pricing_model_name,
+            covariance_model_name,
+            position_model_name,
+            **kwargs,
+        )
     )

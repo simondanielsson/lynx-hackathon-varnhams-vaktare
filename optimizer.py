@@ -70,7 +70,10 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
             #bounds=[(-1, 1), (-1, 1)],
         )
 
-        positions.append(position)
+        if not position.success:
+            _log.warning(f"Position optimizer did not converge for date {args[1]['date']}")
+
+        positions.append(position.x)
 
 
 def _neg_predicted_sharpe_ratio_tomorrow(

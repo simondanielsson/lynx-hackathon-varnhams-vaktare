@@ -42,4 +42,5 @@ def rolling_mean_price(datas, **kwargs):
 # TODO: insert your function here with a name
 PRICING_MODELS = {
     'same_as_yesterday': same_as_yesterday_model,
+    'rolling_mean_price': rolling_mean_price,
 }
