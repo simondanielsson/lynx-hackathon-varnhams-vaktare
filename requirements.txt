@@ -7,3 +7,4 @@ pandas==1.5.3
 pip-chill==1.0.1
 uri-template==1.2.0
 webcolors==1.13
+scipy==1.10.1
