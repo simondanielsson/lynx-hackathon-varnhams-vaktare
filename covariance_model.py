@@ -56,6 +56,6 @@ def _cov_shrunk(x):
 
 COVARIANCE_MODELS = {
     # name: cov_function
-    'naive' : naive_covariance
-    'shrinkage' : ledoit_wolf
+    'naive' : naive_covariance,
+    'shrinkage': ledoit_wolf,
 }
