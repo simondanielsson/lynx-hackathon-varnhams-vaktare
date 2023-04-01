@@ -25,6 +25,7 @@ def naive_covariance(datas, **kwargs):
     cov_window_size = kwargs.get('cov_window_size')
     df = datas['prices'].set_index('dates')
     # TODO: check where to do shift (1)
+    df = df.diff()
     covariances = df.rolling(cov_window_size).cov()#.shift(-1)
     matrices = []
     for date, new_df in covariances.reset_index(level=[0,1]).groupby('dates'):
