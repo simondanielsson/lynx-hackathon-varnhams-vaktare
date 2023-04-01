@@ -82,7 +82,12 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
         # make sure predicted and real dates are aligned
         # _verify_date(predicted_returns_next, real_prices_yesterday_np)
 
-        covariance_matrix_np = covariance_matrix.set_index('level_1').to_numpy()
+        if isinstance(covariance_matrix, pd.DataFrame):
+            covariance_matrix_np = covariance_matrix.set_index('level_1').to_numpy()
+        elif isinstance(covariance_matrix, np.ndarray):
+            covariance_matrix_np = covariance_matrix
+        else:
+            raise ValueError(f'Could not resolve type of covariance matrix: type is {type(covariance_matrix)}')
 
         optimization_args = (
             predicted_returns_quote[1].to_numpy(),
