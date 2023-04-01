@@ -89,9 +89,12 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
         else:
             raise ValueError(f'Could not resolve type of covariance matrix: type is {type(covariance_matrix)}')
 
+        # first iteration when no previous positions exist, we don't compute any slippage
+        positions_yesterday = positions[-1].to_numpy().T if positions else None
+
         optimization_args = (
             predicted_returns_quote[1].to_numpy(),
-            #real_prices_yesterday_np[1:].astype(dtype=np.float64),  # remove date column
+            positions_yesterday,
             covariance_matrix_np,
         )
 
@@ -114,12 +117,10 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
             _neg_predicted_sharpe_ratio_tomorrow,
             x0=x0,
             args=optimization_args,
-            #bounds=[(-1, 1), (-1, 1)],
         )
 
         if not position.success:
             failed_count += 1
-            #
 
         position_np = np.array(position.x).reshape(1, -1)
 
@@ -141,7 +142,7 @@ def _verify_date(predicted_prices_next: List, real_prices_yesterday_np: np.array
 
 
 def _any_contains_nan(args: Tuple[np.array]) -> bool:
-    return any(np.isnan(arg).any() for arg in args)
+    return any(np.isnan(arg).any() for arg in args if isinstance(arg, np.ndarray))
 
 
 def _track_progress(failed_count: int, total_count: int) -> None:
@@ -154,14 +155,13 @@ def _track_progress(failed_count: int, total_count: int) -> None:
 def _neg_predicted_sharpe_ratio_tomorrow(
     positions: np.array,  # variables to optimize
     predicted_returns_quote: np.array,
+    positions_yesterday: np.array,
     covariance_matrix: np.array,
 ) -> float:
     """Objective function to optimize for Sharpe ratio."""
-    if len(positions) != len(predicted_returns_quote):
-        raise ValueError(f'lengths not the same: {len(positions)} != {len(predicted_returns_quote)}')
+    slippage = 100 * 0.0002 * np.abs(positions - positions_yesterday) if positions_yesterday is not None else 0.0
 
-    slippage = 0.0002 *
-    returns = predicted_returns_quote.dot(positions) - slippage
+    returns = predicted_returns_quote.dot(positions) - np.sum(slippage)
     portfolio_std = np.sqrt(positions.T @ covariance_matrix @ positions)
 
     return - returns / portfolio_std
@@ -170,33 +170,40 @@ def _neg_predicted_sharpe_ratio_tomorrow(
 def package_sharpe_opt(datas: abc.Mapping[str, pd.DataFrame], **kwargs):
     """Optimize daily positions for Sharpe ratio.
 
+    Alias `package_sharpe_opt`.
+
     :param datas: dataframes with technical indicators over time.
     :param kwargs: optional hyperparameters.
     :return: asset positions over time.
     """
-    prices = datas['price'].set_index('dates')
+    prices = datas['prices'].set_index('dates')
 
     positions = []
-    for index in range(prices.shape[0]):
-        covariance_matrix = datas['covariance'][index]
+    for index in range(kwargs.get('cov_window_size'), prices.shape[0]):
+        covariance_matrix = datas['covariance'][index].set_index('level_1').to_numpy()
         predicted_returns = datas['predicted_returns'].iloc[index, :]
 
         ef = EfficientFrontier(predicted_returns, cov_matrix=covariance_matrix)
         weights = ef.max_sharpe()
         cleaned_weights = ef.clean_weights()
 
-        position = pd.DataFrame(cleaned_weights, columns=[prices.columns], index=[prices.index[index]])
+        position = pd.DataFrame(cleaned_weights, index=[prices.index[index]])
 
-        positions.append(cleaned_weights)
-
+        positions.append(position)
 
     return pd.concat(
         positions
-    )
+    ).shift(1)  # align with trade date
+
+
+def get_positions_from_linear_model(datas, **kwargs):
+    """Get positions already computed by the linear model in price_model.py."""
+    return datas['predicted_returns']
 
 
 POSITION_MODELS = {
     'lynx_sign_model': lynx_sign_model,
     'sharpe_optimizer': sharpe_optimizer,
     'package_sharpe_opt': package_sharpe_opt,
+    'no_op': get_positions_from_linear_model
 }

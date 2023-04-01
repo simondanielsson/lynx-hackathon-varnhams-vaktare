@@ -36,6 +36,7 @@ def naive_covariance(datas, **kwargs):
 
     return matrices
 
+
 def ledoit_wolf(datas, **kwargs):
     cov_window_size = kwargs.get('cov_window_size')
     df = datas['prices'].set_index('dates')
@@ -47,6 +48,7 @@ def ledoit_wolf(datas, **kwargs):
             
     
 def _cov_shrunk(x):
+    # catch missing entries
     try:
         cov = ShrunkCovariance().fit(x)
         return cov.covariance_
@@ -54,8 +56,14 @@ def _cov_shrunk(x):
         return None
 
 
+def no_op(datas, **kwargs):
+    """Do no particular covariance estimation in this step."""
+    return None
+
+
 COVARIANCE_MODELS = {
     # name: cov_function
     'naive' : naive_covariance,
     'shrinkage': ledoit_wolf,
+    'no_op': no_op,
 }

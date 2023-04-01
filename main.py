@@ -123,6 +123,8 @@ if __name__ == '__main__':
     
     COVARIANCE MODELS:
     'naive'
+    'shrinkage'
+    'no_op'
     
     POSITION MODELS:
     'lynx_sign_model'
@@ -130,9 +132,9 @@ if __name__ == '__main__':
     'package_sharpe_opt'
     """
 
-    pricing_model_name = 'ema_returns'
-    covariance_model_name = 'naive'
-    position_model_name = 'sharpe_optimizer'
+    pricing_model_name = 'linear_return_predictor'
+    covariance_model_name = 'no_op'
+    position_model_name = 'no_op'
     do_save = True
 
     # add hyperparameters here! Make sure there are no name collisions
@@ -140,7 +142,12 @@ if __name__ == '__main__':
         'vol_window': 50,
         'trend_window': 100,
         'price_window_size': 10,
+        'price_span': 50,
         'cov_window_size': 125,  # half a year
+        # try these!
+        'hist_window': 30,
+        'future_window': 10,
+        'vol_window': 100,
     }
 
     sys.exit(
