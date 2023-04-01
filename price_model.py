@@ -2,6 +2,8 @@ from collections import abc
 import logging
 
 import pandas as pd
+import pypfopt
+from tqdm import tqdm
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.INFO)
@@ -33,14 +35,50 @@ def arma_price(datas, **kwargs):
     ws = kwargs.get('window_size', 10)
 
 
-def rolling_mean_price(datas, **kwargs):
+def rolling_mean_returns(datas, **kwargs):
+    prices = datas['prices'].set_index('dates')
+
     nbr_days = kwargs.get('price_window_size', 10)
-    prediction = datas['prices'].set_index('dates').diff().rolling(nbr_days).mean().shift(1)
-    return prediction
+
+    # assume quote day is today, i.e. we know the price today and set our order the coming night
+    predicted_price_1_days = prices.diff().rolling(nbr_days).mean().shift(1)  # [.., quote - 1]
+    predicted_price_2_days = prices.diff().rolling(nbr_days).mean()           # [.., quote]
+
+    predicted_return_on_quote_day = predicted_price_2_days - predicted_price_1_days
+
+    return predicted_return_on_quote_day
+
+
+def ema_returns(datas, **kwargs):
+    """
+    Calculate exponentially-weighted mean of daily returns.
+
+    :param datas:
+    :param kwargs:
+    :return:
+    """
+    prices = datas['prices'].set_index('dates')
+
+    predicted_returns = []
+    for index in tqdm(range(20, prices.shape[0] - 1), total=prices.shape[0]):
+        prices_until_incl_quote = prices.iloc[:index+1, :]
+
+        # default span=500
+        predicted_returns_at_trade = pypfopt.expected_returns.ema_historical_return(
+            prices_until_incl_quote
+        )
+
+        predicted_returns_at_trade_df = pd.DataFrame(
+            predicted_returns_at_trade,
+        ).T
+        predicted_returns.append(predicted_returns_at_trade_df)
+
+    return pd.concat(predicted_returns)
 
 
 # TODO: insert your function here with a name
 PRICING_MODELS = {
     'same_as_yesterday': same_as_yesterday_model,
-    'rolling_mean_price': rolling_mean_price,
+    'rolling_mean_returns': rolling_mean_returns,
+    'ema_returns': ema_returns
 }

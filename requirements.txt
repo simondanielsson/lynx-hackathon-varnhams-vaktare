@@ -9,3 +9,4 @@ uri-template==1.2.0
 webcolors==1.13
 scipy==1.10.1
 tqdm==4.65.0
+PyPortfolioOpt

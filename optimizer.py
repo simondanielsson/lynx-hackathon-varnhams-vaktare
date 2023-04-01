@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import scipy
 from tqdm import tqdm
+from pypfopt.efficient_frontier import EfficientFrontier
 
 from utils import timing
 
@@ -28,15 +29,16 @@ def get_positions(position_model_name: str, datas: abc.Mapping[str, pd.DataFrame
     return position_model(datas, **kwargs)
 
 
+@timing
 def lynx_sign_model(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.DataFrame:
-    ret = datas['prices'].diff()
+    ret = datas['prices'].set_index('dates').diff()
 
     vol_window = kwargs.get('vol_window', 50)
     trend_window = kwargs.get('trend_window', 100)
 
     pos = pd.DataFrame(np.nan, index=ret.index, columns=ret.columns)
     # loop over all dates
-    for t in range(ret.shape[0]):
+    for t in tqdm(range(ret.shape[0]), total=ret.shape[0]):
         # Volatility estimate; standard deviation on the last vol_window days, up to t-1
         vol = np.sqrt((ret ** 2).iloc[t - vol_window:t].mean())
 
@@ -69,24 +71,22 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
 
     positions = []
     for (
-        predicted_prices_next,
-        real_prices_yesterday,
+        predicted_returns_quote,
         covariance_matrix,
     ) in tqdm(zip(
-        datas['predicted_prices'].iterrows(),
-        datas['prices'].iterrows(),
+        datas['predicted_returns'].iterrows(),
         datas['covariance'],
     ), total=len(datas['prices'])):
-        real_prices_yesterday_np = real_prices_yesterday[1].to_numpy()
+        #real_prices_yesterday_np = real_prices_yesterday[1].to_numpy()
 
         # make sure predicted and real dates are aligned
-        _verify_date(predicted_prices_next, real_prices_yesterday_np)
+        # _verify_date(predicted_returns_next, real_prices_yesterday_np)
 
         covariance_matrix_np = covariance_matrix.set_index('level_1').to_numpy()
 
         optimization_args = (
-            predicted_prices_next[1].to_numpy(),
-            real_prices_yesterday_np[1:].astype(dtype=np.float64),  # remove date column
+            predicted_returns_quote[1].to_numpy(),
+            #real_prices_yesterday_np[1:].astype(dtype=np.float64),  # remove date column
             covariance_matrix_np,
         )
 
@@ -118,15 +118,15 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
 
         position_np = np.array(position.x).reshape(1, -1)
 
-        position_df = pd.DataFrame(position_np, columns=datas['prices'].columns[1:], index=[predicted_prices_next[0]])
+        position_df = pd.DataFrame(position_np, columns=datas['prices'].columns[1:], index=[predicted_returns_quote[0]])
 
         positions.append(position_df)
 
     _track_progress(failed_count=failed_count, total_count=len(datas['prices']))
-    # indexed by date
+    # indexed by date; shifted up to trade date (i.e. from quote day to trade day, pos_t)
     return pd.concat(
         positions,
-    )
+    ).shift(1)
 
 
 def _verify_date(predicted_prices_next: List, real_prices_yesterday_np: np.array) -> None:
@@ -148,21 +148,50 @@ def _track_progress(failed_count: int, total_count: int) -> None:
 
 def _neg_predicted_sharpe_ratio_tomorrow(
     positions: np.array,  # variables to optimize
-    predicted_prices_next: np.array,
-    real_prices_yesterday: np.array,
+    predicted_returns_quote: np.array,
     covariance_matrix: np.array,
 ) -> float:
     """Objective function to optimize for Sharpe ratio."""
-    if not (len(positions) == len(predicted_prices_next) == len(real_prices_yesterday)):
-        raise ValueError(f'lengths not the same: {len(positions)} {len(predicted_prices_next)} {len(real_prices_yesterday)}')
+    if len(positions) != len(predicted_returns_quote):
+        raise ValueError(f'lengths not the same: {len(positions)} != {len(predicted_returns_quote)}')
 
-    returns = (predicted_prices_next - real_prices_yesterday).dot(positions)
+    slippage = 0.0002 *
+    returns = predicted_returns_quote.dot(positions) - slippage
     portfolio_std = np.sqrt(positions.T @ covariance_matrix @ positions)
 
     return - returns / portfolio_std
 
 
+def package_sharpe_opt(datas: abc.Mapping[str, pd.DataFrame], **kwargs):
+    """Optimize daily positions for Sharpe ratio.
+
+    :param datas: dataframes with technical indicators over time.
+    :param kwargs: optional hyperparameters.
+    :return: asset positions over time.
+    """
+    prices = datas['price'].set_index('dates')
+
+    positions = []
+    for index in range(prices.shape[0]):
+        covariance_matrix = datas['covariance'][index]
+        predicted_returns = datas['predicted_returns'].iloc[index, :]
+
+        ef = EfficientFrontier(predicted_returns, cov_matrix=covariance_matrix)
+        weights = ef.max_sharpe()
+        cleaned_weights = ef.clean_weights()
+
+        position = pd.DataFrame(cleaned_weights, columns=[prices.columns], index=[prices.index[index]])
+
+        positions.append(cleaned_weights)
+
+
+    return pd.concat(
+        positions
+    )
+
+
 POSITION_MODELS = {
     'lynx_sign_model': lynx_sign_model,
     'sharpe_optimizer': sharpe_optimizer,
+    'package_sharpe_opt': package_sharpe_opt,
 }

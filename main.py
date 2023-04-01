@@ -38,7 +38,7 @@ def main(
     )
     datas: Dict[str, pd.DataFrame] = _load_data()
 
-    datas['predicted_prices'] = get_prices(
+    datas['predicted_returns'] = get_prices(
         pricing_model_name=pricing_model_name,
         datas=datas,
         **kwargs,
@@ -108,7 +108,7 @@ def _save_results(positions: pd.DataFrame, datas: abc.Mapping, do_save: bool, sa
         json.dump(save_metadata, fp)
 
     # save predicted prices
-    datas['predicted_prices'].to_csv(save_dir / 'predicted_prices.csv', index_label='dates')
+    datas['predicted_returns'].to_csv(save_dir / 'predicted_returns.csv', index_label='dates')
 
     # Performance panel
     prices = datas['prices'].set_index('dates')
@@ -119,7 +119,7 @@ def _save_results(positions: pd.DataFrame, datas: abc.Mapping, do_save: bool, sa
 if __name__ == '__main__':
     """
     PRICE MODELS:
-    'rolling_mean_price'
+    'rolling_mean_returns'
     
     COVARIANCE MODELS:
     'naive'
@@ -127,9 +127,10 @@ if __name__ == '__main__':
     POSITION MODELS:
     'lynx_sign_model'
     'sharpe_optimizer'
+    'package_sharpe_opt'
     """
 
-    pricing_model_name = 'rolling_mean_price'
+    pricing_model_name = 'ema_returns'
     covariance_model_name = 'naive'
     position_model_name = 'sharpe_optimizer'
     do_save = True
