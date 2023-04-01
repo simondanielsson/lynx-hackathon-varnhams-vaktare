@@ -16,7 +16,7 @@ from price_model import get_prices
 
 # TODO: fill in
 NAMES_TO_FILE_NAMES = {
-    "prices": "example_prices.csv",  # TODO: change
+    "prices": "hackathon_prices_dev.csv",
 }
 
 _log = logging.getLogger(__name__)
@@ -107,6 +107,9 @@ def _save_results(positions: pd.DataFrame, datas: abc.Mapping, do_save: bool, sa
     with open(save_dir / 'hyperparams.json', 'w') as fp:
         json.dump(save_metadata, fp)
 
+    # save predicted prices
+    datas['predicted_prices'].to_csv(save_dir / 'predicted_prices.csv', index_label='dates')
+
     # Performance panel
     prices = datas['prices'].set_index('dates')
     evaluation.plot_key_figures(positions, prices)
@@ -136,7 +139,7 @@ if __name__ == '__main__':
         'vol_window': 50,
         'trend_window': 100,
         'price_window_size': 10,
-        'cov_window_size': 20,
+        'cov_window_size': 125,  # half a year
     }
 
     sys.exit(
