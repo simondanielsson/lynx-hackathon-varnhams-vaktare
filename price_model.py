@@ -35,7 +35,7 @@ def arma_price(datas, **kwargs):
 
 def rolling_mean_price(datas, **kwargs):
     nbr_days = kwargs.get('price_window_size', 10)
-    prediction = datas['prices'].set_index('dates').rolling(nbr_days).mean().shift(1)
+    prediction = datas['prices'].set_index('dates').diff().rolling(nbr_days).mean().shift(1)
     return prediction
 
 
