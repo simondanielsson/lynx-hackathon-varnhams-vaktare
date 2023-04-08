@@ -12,11 +12,13 @@ import evaluation
 from covariance_model import get_covariance
 from optimizer import get_positions
 from predictions import PREDICTIONS_PATH
+from predictions_after import PREDICTIONS_AFTER_PATH
 from price_model import get_prices
 
 # TODO: fill in
 NAMES_TO_FILE_NAMES = {
     "prices": "hackathon_prices_dev.csv",
+    "eval_prices": 'hackathon_prices_all.csv'
 }
 
 _log = logging.getLogger(__name__)
@@ -67,6 +69,7 @@ def main(
         datas=datas,
         do_save=do_save,
         save_metadata=save_metadata,
+        **kwargs,
     )
 
     return 0
@@ -81,7 +84,7 @@ def _load_data() -> abc.Mapping[str, pd.DataFrame]:
     }
 
 
-def _save_results(positions: pd.DataFrame, datas: abc.Mapping, do_save: bool, save_metadata: abc.Mapping) -> None:
+def _save_results(positions: pd.DataFrame, datas: abc.Mapping, do_save: bool, save_metadata: abc.Mapping, **kwargs) -> None:
     """Save positions to disk.
 
     NOTE: to load this csv file properly, for instance when used
@@ -96,8 +99,8 @@ def _save_results(positions: pd.DataFrame, datas: abc.Mapping, do_save: bool, sa
     # prepare for prediction directory
     current_time = datetime.strftime(datetime.now(), format="%H%M")
     save_dir = (
-        PREDICTIONS_PATH /
-        f"{current_time}-{save_metadata['pricing_model_name']}-"
+        PREDICTIONS_AFTER_PATH /
+        f"{current_time}{'-eval' if kwargs.get('eval') else ''}-{save_metadata['pricing_model_name']}-"
         f"{save_metadata['covariance_model_name']}-{save_metadata['position_model_name']}"
     )
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -111,7 +114,8 @@ def _save_results(positions: pd.DataFrame, datas: abc.Mapping, do_save: bool, sa
     datas['predicted_returns'].to_csv(save_dir / 'predicted_returns.csv', index_label='dates')
 
     # Performance panel
-    prices = datas['prices'].set_index('dates')
+    price_data_name = 'eval_prices' if kwargs.get('eval') else 'prices'
+    prices = datas[price_data_name].set_index('dates')
     evaluation.plot_key_figures(positions, prices)
     plt.savefig(save_dir / 'performance_summary.png')
 
@@ -120,6 +124,8 @@ if __name__ == '__main__':
     """
     PRICE MODELS:
     'rolling_mean_returns'
+    'linear_return_predictor'
+    'linear_return_independent_assets_lynx'
     
     COVARIANCE MODELS:
     'naive'
@@ -130,24 +136,25 @@ if __name__ == '__main__':
     'lynx_sign_model'
     'sharpe_optimizer'
     'package_sharpe_opt'
+    'no_op'
     """
 
     pricing_model_name = 'linear_return_predictor'
-    covariance_model_name = 'no_op'
-    position_model_name = 'no_op'
+    covariance_model_name = 'naive'
+    position_model_name = 'sharpe_optimizer'
     do_save = True
 
     # add hyperparameters here! Make sure there are no name collisions
     kwargs = {
-        'vol_window': 50,
         'trend_window': 100,
         'price_window_size': 10,
         'price_span': 50,
         'cov_window_size': 125,  # half a year
         # try these!
-        'hist_window': 30,
+        'hist_window': 150,
         'future_window': 10,
         'vol_window': 100,
+        'eval': True,
     }
 
     sys.exit(

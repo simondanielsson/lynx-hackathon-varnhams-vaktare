@@ -1,0 +1,1 @@
+{"pricing_model_name": "linear_return_predictor", "covariance_model_name": "no_op", "position_model_name": "no_op", "hparams": {"trend_window": 100, "price_window_size": 10, "price_span": 50, "cov_window_size": 125, "hist_window": 150, "future_window": 10, "vol_window": 100, "eval": true}}

@@ -24,17 +24,18 @@ def get_covariance(covariance_model_name: str, datas: abc.Mapping[str, pd.DataFr
 
 def naive_covariance(datas, **kwargs):
     cov_window_size = kwargs.get('cov_window_size')
-    df = datas['prices'].set_index('dates')
-    # TODO: check where to do shift (1)
-    # TODO: remove diff if we are working with returns
-    # df = df.diff()
-    covariances = df.rolling(cov_window_size).cov()
-    matrices = []
-    for date, new_df in covariances.reset_index(level=[0,1]).groupby('dates'):
-        new_df.drop(columns=new_df.columns[0], axis=1, inplace=True)
-        matrices.append(new_df)
 
-    return matrices
+    price_data_name = 'eval_prices' if kwargs.get('eval') else 'prices'
+    returns = datas[price_data_name].set_index('dates').diff()
+
+    # TODO: check if/where to do shift (1)
+    covariances = returns.rolling(cov_window_size).cov()
+    cov_matrices = []
+    for date, cov_matrix_day_t in covariances.reset_index(level=[0, 1]).groupby('dates'):
+        cov_matrix_day_t.drop(columns=cov_matrix_day_t.columns[0], axis=1, inplace=True)
+        cov_matrices.append((date, cov_matrix_day_t))
+
+    return cov_matrices
 
 
 def ledoit_wolf(datas, **kwargs):

@@ -94,8 +94,27 @@ def linear_model_window_return_predictor(datas, **kwargs):
         kwargs.get('future_window')
     )
 
-    positions = get_positions_from_linear_model(
+    price_data_name = 'eval_prices' if kwargs.get('eval') else 'prices'
+    returns = get_returns_from_linear_model(
+        datas[price_data_name].set_index('dates'),
+        models,
+        kwargs.get('hist_window'),
+        kwargs.get('vol_window'),
+    )
+
+    return returns
+
+
+def lynx_predictor_with_linear_returns(datas, **kwargs):
+    models = train_models(
         datas['prices'].set_index('dates'),
+        kwargs.get('hist_window'),
+        kwargs.get('future_window')
+    )
+
+    price_data_name = 'eval_prices' if kwargs.get('eval') else 'prices'
+    positions = get_positions_from_linear_model_lynx(
+        datas[price_data_name].set_index('dates'),
         models,
         kwargs.get('hist_window'),
         kwargs.get('vol_window'),
@@ -105,7 +124,7 @@ def linear_model_window_return_predictor(datas, **kwargs):
 
 
 def train_models(prices, hist_window=30, future_window=10):
-    """Train a linear model using historical returns, predicting accumalted future_window days return"""
+    """Train a linear model using historical returns, predicting accumulated future_window days return"""
     ret = prices.ffill().diff().dropna()
 
     models = {column: LinearRegression() for column in ret.columns}
@@ -128,31 +147,51 @@ def train_models(prices, hist_window=30, future_window=10):
     return models
 
 
-def get_positions_from_linear_model(prices, models, trend_window=30, vol_window=100):
+def get_returns_from_linear_model(prices, models, trend_window=30, vol_window=100):
+    ret = prices.ffill().diff().dropna()
+
+    #pos = pd.DataFrame(np.nan, index=ret.index, columns=ret.columns)
+
+    _log.info('Inferring returns...')
+    predicted_future_window_returns = pd.DataFrame(np.nan, index=ret.index, columns=ret.columns)
+    for t in tqdm(range(trend_window, ret.shape[0] - 1), total=ret.shape[0]):
+        # predict coming future_days accumulated days return
+        predicted_future_window_return_trade_day = pd.DataFrame(
+            {column: model.predict([ret[column].iloc[t - trend_window:t]]) for column, model in models.items()}
+        )
+
+        # predicted return for future_window day holding, from [t, t+future_window), using info from t-1 and earlier
+        # return at trade day t, i.e. price change between t to t+future_window.
+        predicted_future_window_returns.iloc[t+1] = predicted_future_window_return_trade_day
+
+    return predicted_future_window_returns
+
+
+def get_positions_from_linear_model_lynx(prices, models, trend_window=30, vol_window=100):
     ret = prices.ffill().diff().dropna()
 
     pos = pd.DataFrame(np.nan, index=ret.index, columns=ret.columns)
-    # loop over all dates
-    for t in range(trend_window, ret.shape[0] - 1):
+    for t in tqdm(range(trend_window, ret.shape[0] - 1), total=ret.shape[0]):
         # Volatility estimate; standard deviation on the last vol_window days, up to t-1
         vol = np.sqrt((ret ** 2).iloc[t - vol_window:t].mean())
 
         # predict coming future_days accumulated days return
-        return_ = pd.DataFrame(
+        predicted_future_window_return_trade_day = pd.DataFrame(
             {column: model.predict([ret[column].iloc[t - trend_window:t]]) for column, model in models.items()}
         )
 
-        # Take a long position if the historical 30-days predicted 10-day return is positive, otherwise take a short position (sign of the block return)
+        # Take a long position if the historical 30-days predicted 10-day return is positive, otherwise take a short position
+        # scale by return magnitude
         # Position at date t; risk adjust with volatility from previous date
-        pos.iloc[t + 1] = return_ / vol
+        pos.iloc[t + 1] = predicted_future_window_return_trade_day / vol
 
     return pos
 
 
-# TODO: insert your function here with a name
 PRICING_MODELS = {
     'same_as_yesterday': same_as_yesterday_model,
     'rolling_mean_returns': rolling_mean_returns,
     'ema_returns': ema_returns,
     'linear_return_predictor': linear_model_window_return_predictor,
+    'linear_return_independent_assets_lynx': lynx_predictor_with_linear_returns ,
 }

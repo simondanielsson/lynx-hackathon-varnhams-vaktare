@@ -56,11 +56,22 @@ def lynx_sign_model(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.DataF
 @timing
 def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.DataFrame:
     """Optimize positions using predicted prices and historical asset price covariances."""
+    # remove first element as no return info exists for that date
+    covariance_matrices = datas['covariance'][1:]
+    predicted_returns = datas['predicted_returns']
+
+    if len(predicted_returns) != len(covariance_matrices):
+        raise ValueError(
+            f"Predicted returns and covariance dataframe is not of equal length: "
+            f"{len(datas['predicted_returns'])} != {len(datas['covariance'])}"
+        )
+
     # for result replication
     np.random.seed(1)
 
     # exclude date column
     n_assets = datas['prices'].shape[1] - 1
+    assets = datas['prices'].columns[1:]
 
     # display how many dates first were skipped
     n_date_skips = 0
@@ -71,16 +82,18 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
 
     positions = []
     for (
-        predicted_returns_quote,
-        covariance_matrix,
-    ) in tqdm(zip(
-        datas['predicted_returns'].iterrows(),
-        datas['covariance'],
-    ), total=len(datas['prices'])):
-        #real_prices_yesterday_np = real_prices_yesterday[1].to_numpy()
-
-        # make sure predicted and real dates are aligned
-        # _verify_date(predicted_returns_next, real_prices_yesterday_np)
+        (return_date, predicted_returns_trade_day),
+        (cov_date, covariance_matrix),
+    ) in tqdm(
+        zip(
+            predicted_returns.iterrows(),
+            covariance_matrices,
+        ),
+        total=len(datas['predicted_returns'])
+    ):
+        # TODO: try updating position only every future_window'th day
+        if not return_date == cov_date:
+            raise ValueError(f"Predicted return date not aligned with cov date: {return_date} != {cov_date}.")
 
         if isinstance(covariance_matrix, pd.DataFrame):
             covariance_matrix_np = covariance_matrix.set_index('level_1').to_numpy()
@@ -93,7 +106,7 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
         positions_yesterday = positions[-1].to_numpy().T if positions else None
 
         optimization_args = (
-            predicted_returns_quote[1].to_numpy(),
+            predicted_returns_trade_day.to_numpy(),
             positions_yesterday,
             covariance_matrix_np,
         )
@@ -111,6 +124,7 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
                       f' Make sure this aligns with the maximal window size')
 
         # random uniform position initialization in [-1, 1]
+        # TODO: try initializing from yesterdays position!!
         x0 = np.random.rand(n_assets) * 2 - 1
 
         position = scipy.optimize.minimize(
@@ -124,21 +138,16 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
 
         position_np = np.array(position.x).reshape(1, -1)
 
-        position_df = pd.DataFrame(position_np, columns=datas['prices'].columns[1:], index=[predicted_returns_quote[0]])
+        position_df = pd.DataFrame(position_np, columns=assets, index=[return_date])
 
         positions.append(position_df)
 
     _track_progress(failed_count=failed_count, total_count=len(datas['prices']))
-    # indexed by date; shifted up to trade date (i.e. from quote day to trade day, pos_t)
+    # TODO: check if we should shift this by 1
     return pd.concat(
         positions,
-    ).shift(1)
-
-
-def _verify_date(predicted_prices_next: List, real_prices_yesterday_np: np.array) -> None:
-    predicted_price_date = predicted_prices_next[0]
-    real_prices_date = real_prices_yesterday_np[0]
-    assert predicted_price_date == real_prices_date
+    )
+    #).shift(1)
 
 
 def _any_contains_nan(args: Tuple[np.array]) -> bool:
@@ -159,7 +168,7 @@ def _neg_predicted_sharpe_ratio_tomorrow(
     covariance_matrix: np.array,
 ) -> float:
     """Objective function to optimize for Sharpe ratio."""
-    slippage = 100 * 0.0002 * np.abs(positions - positions_yesterday) if positions_yesterday is not None else 0.0
+    slippage = 0.0002 * np.abs(positions - positions_yesterday) if positions_yesterday is not None else 0.0
 
     returns = predicted_returns_quote.dot(positions) - np.sum(slippage)
     portfolio_std = np.sqrt(positions.T @ covariance_matrix @ positions)
