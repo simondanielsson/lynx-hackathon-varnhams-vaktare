@@ -66,7 +66,7 @@ $w_t = argmax_{w \in R^k} \frac{r_{t,6}^\top w}{\sqrt{w^\top \hat{\Sigma}_t w}}$
 where $r_{t,6}$ is the predicted 6-day return at day $t$, and $\hat{\Sigma}_{t}$ the predicted covariance matrix at time $t$ with linear shrinkage.
 We solve this by numerical optimization. Note that there is no independence assumption on the joint asset returns. 
 
-#### Modification 
+#### Modifications
 
 **$L1$ to $L2$ slippage.** We do some modifications to this initial formulation. First, we account for transaction costs (slippage) by including in the objective function 
 a negative term proportional to yesterday's total absolute changes in positions. Although we predict medium-term returns (not just the next day), we still
