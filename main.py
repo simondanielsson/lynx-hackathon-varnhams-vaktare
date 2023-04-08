@@ -140,7 +140,7 @@ if __name__ == '__main__':
     """
 
     pricing_model_name = 'linear_return_predictor'
-    covariance_model_name = 'naive'
+    covariance_model_name = 'shrinkage'
     position_model_name = 'sharpe_optimizer'
     do_save = True
 
@@ -154,6 +154,7 @@ if __name__ == '__main__':
         'hist_window': 150,
         'future_window': 10,
         'vol_window': 100,
+        'skip_update_freq': 3,  # skip update position frequency
         'eval': True,
     }
 

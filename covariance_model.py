@@ -3,11 +3,12 @@ import logging
 
 import pandas as pd
 import numpy as np
-import scipy
 from sklearn.covariance import ShrunkCovariance
+from tqdm import tqdm
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.INFO)
+
 
 def get_covariance(covariance_model_name: str, datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.DataFrame:
     """Get the covariance matrices for day t+1, determined at quote day t-1."""
@@ -17,7 +18,7 @@ def get_covariance(covariance_model_name: str, datas: abc.Mapping[str, pd.DataFr
         raise ValueError(f'No covariance model with name {covariance_model_name},'
                          f' not in {COVARIANCE_MODELS.keys()}.')
 
-    _log.info(f'Calculating asset covariances using strategy `{covariance_model_name}`...')
+    _log.info(f'Calculating return covariances using strategy `{covariance_model_name}`...')
 
     return covariance_model(datas, **kwargs)
 
@@ -38,23 +39,31 @@ def naive_covariance(datas, **kwargs):
     return cov_matrices
 
 
-def ledoit_wolf(datas, **kwargs):
+def shrinkage(datas, **kwargs):
     cov_window_size = kwargs.get('cov_window_size')
-    df = datas['prices'].set_index('dates')
-    vols = []
-    for t in range(df.shape[0]-1):
-        vol = _cov_shrunk(df.iloc[t-cov_window_size: t])
-        vols.append(vol)
-    return vols
+
+    price_data_name = 'eval_prices' if kwargs.get('eval') else 'prices'
+    returns = datas[price_data_name].set_index('dates').diff()
+
+    covariance_matrices = []
+    for t in tqdm(range(returns.shape[0]), total=returns.shape[0]):
+        covariance_matrix = _get_shrunk_covariance_matrix(
+            returns.iloc[t - cov_window_size:t]
+        )
+        date = returns.index[t]
+        covariance_matrices.append((date, covariance_matrix))
+
+    return covariance_matrices
             
     
-def _cov_shrunk(x):
+def _get_shrunk_covariance_matrix(returns):
     # catch missing entries
     try:
-        cov = ShrunkCovariance().fit(x)
+        cov = ShrunkCovariance().fit(returns)
         return cov.covariance_
-    except:
-        return None
+
+    except Exception as e:
+        return np.array([None])
 
 
 def no_op(datas, **kwargs):
@@ -65,6 +74,6 @@ def no_op(datas, **kwargs):
 COVARIANCE_MODELS = {
     # name: cov_function
     'naive' : naive_covariance,
-    'shrinkage': ledoit_wolf,
+    'shrinkage': shrinkage,
     'no_op': no_op,
 }

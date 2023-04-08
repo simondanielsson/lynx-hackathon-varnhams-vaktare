@@ -1,3 +1,4 @@
+import copy
 from collections import abc
 import logging
 from typing import List, Tuple
@@ -63,7 +64,7 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
     if len(predicted_returns) != len(covariance_matrices):
         raise ValueError(
             f"Predicted returns and covariance dataframe is not of equal length: "
-            f"{len(datas['predicted_returns'])} != {len(datas['covariance'])}"
+            f"{len(predicted_returns)} != {len(covariance_matrices)}"
         )
 
     # for result replication
@@ -80,6 +81,11 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
     # track failed convergences
     failed_count = 0
 
+    # skip updating positions every update_freq'th day
+    skip_update_freq = kwargs.get('skip_update_freq')
+    counter = 1
+    nbr_skips = 0
+
     positions = []
     for (
         (return_date, predicted_returns_trade_day),
@@ -91,9 +97,17 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
         ),
         total=len(datas['predicted_returns'])
     ):
-        # TODO: try updating position only every future_window'th day
         if not return_date == cov_date:
             raise ValueError(f"Predicted return date not aligned with cov date: {return_date} != {cov_date}.")
+
+        if counter % skip_update_freq == 0:
+            # stay at same position
+            last_pos = copy.deepcopy(positions[-1])
+            last_pos.index = [cov_date]
+            positions.append(last_pos)
+            nbr_skips += 1
+            counter += 1
+            continue
 
         if isinstance(covariance_matrix, pd.DataFrame):
             covariance_matrix_np = covariance_matrix.set_index('level_1').to_numpy()
@@ -123,9 +137,11 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
             _log.info(f'Skipped the {n_date_skips} first dates in optimizer.'
                       f' Make sure this aligns with the maximal window size')
 
-        # random uniform position initialization in [-1, 1]
+
         # TODO: try initializing from yesterdays position!!
-        x0 = np.random.rand(n_assets) * 2 - 1
+        # random uniform position initialization in [-1, 1]
+        #x0 = np.random.rand(n_assets) * 2 - 1
+        x0 = predicted_returns_trade_day.to_numpy()
 
         position = scipy.optimize.minimize(
             _neg_predicted_sharpe_ratio_tomorrow,
@@ -141,8 +157,9 @@ def sharpe_optimizer(datas: abc.Mapping[str, pd.DataFrame], **kwargs) -> pd.Data
         position_df = pd.DataFrame(position_np, columns=assets, index=[return_date])
 
         positions.append(position_df)
+        counter += 1
 
-    _track_progress(failed_count=failed_count, total_count=len(datas['prices']))
+    _track_progress(failed_count=failed_count, total_count=len(datas['prices']), nbr_skips=nbr_skips)
     # TODO: check if we should shift this by 1
     return pd.concat(
         positions,
@@ -154,11 +171,11 @@ def _any_contains_nan(args: Tuple[np.array]) -> bool:
     return any(np.isnan(arg).any() for arg in args if isinstance(arg, np.ndarray))
 
 
-def _track_progress(failed_count: int, total_count: int) -> None:
+def _track_progress(failed_count: int, total_count: int, nbr_skips: int) -> None:
     if failed_count:
-        _log.info(f"Position optimizer did not converge for {failed_count} / {total_count} dates")
+        _log.info(f"Position optimizer did not converge for {failed_count} / {total_count} dates; {nbr_skips=}")
     else:
-        _log.info(f"Optimizer converged for all dates!")
+        _log.info(f"Optimizer converged for all dates! {nbr_skips=}")
 
 
 def _neg_predicted_sharpe_ratio_tomorrow(
@@ -168,7 +185,9 @@ def _neg_predicted_sharpe_ratio_tomorrow(
     covariance_matrix: np.array,
 ) -> float:
     """Objective function to optimize for Sharpe ratio."""
-    slippage = 0.0002 * np.abs(positions - positions_yesterday) if positions_yesterday is not None else 0.0
+    # TODO: try penalising squared change in position
+    #slippage = 0.0002 * np.abs(positions - positions_yesterday) if positions_yesterday is not None else 0.0
+    slippage = 10 * 0.0002 * np.square(positions - positions_yesterday) if positions_yesterday is not None else 0.0
 
     returns = predicted_returns_quote.dot(positions) - np.sum(slippage)
     portfolio_std = np.sqrt(positions.T @ covariance_matrix @ positions)
