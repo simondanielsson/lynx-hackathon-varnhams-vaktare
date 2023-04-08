@@ -1,6 +1,6 @@
 import pandas as pd
 
-df = pd.read_csv("data/example_prices.csv")
+df = pd.read_csv("../data/example_prices.csv")
 df
 
 import math
