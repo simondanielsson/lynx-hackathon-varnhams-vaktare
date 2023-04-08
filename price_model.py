@@ -188,10 +188,38 @@ def get_positions_from_linear_model_lynx(prices, models, trend_window=30, vol_wi
     return pos
 
 
+def lynx_baseline(datas, **kwargs):
+    price_data_name = 'eval_prices' if kwargs.get('eval') else 'prices'
+    ret = datas[price_data_name].set_index('dates').ffill().diff().dropna()
+
+    trend_window = kwargs.get('trend_window', 50)
+    vol_window = kwargs.get('vol_window', 125)
+
+    pos = pd.DataFrame(np.nan, index=ret.index, columns=ret.columns)
+    for t in tqdm(range(trend_window, ret.shape[0] - 1), total=ret.shape[0]):
+        # Volatility estimate; standard deviation on the last vol_window days, up to t-1
+        vol = np.sqrt((ret ** 2).iloc[t - vol_window:t].mean())
+
+        # Mean return between t-trend_window and t-1
+        block_ret = ret.iloc[t - trend_window:t].sum()
+
+        # Take a long position if the 50-days return is positive, otherwise take a short position (sign of the block return)
+        unadj_pos = np.sign(block_ret)
+
+        # Position at date t; risk adjust with volatility from previous date
+        pos.iloc[t] = unadj_pos / vol
+
+    return pos
+
+
+
+
+
 PRICING_MODELS = {
     'same_as_yesterday': same_as_yesterday_model,
     'rolling_mean_returns': rolling_mean_returns,
     'ema_returns': ema_returns,
     'linear_return_predictor': linear_model_window_return_predictor,
-    'linear_return_independent_assets_lynx': lynx_predictor_with_linear_returns ,
+    'linear_return_independent_assets_lynx': lynx_predictor_with_linear_returns,
+    'lynx_baseline': lynx_baseline,
 }

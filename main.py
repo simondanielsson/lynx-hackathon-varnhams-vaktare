@@ -4,6 +4,7 @@ from collections import abc
 from datetime import datetime
 from typing import Dict
 import logging
+from pathlib import Path
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -17,8 +18,8 @@ from price_model import get_prices
 
 # TODO: fill in
 NAMES_TO_FILE_NAMES = {
-    "prices": "hackathon_prices_dev.csv",
-    "eval_prices": 'hackathon_prices_all.csv'
+    "prices": Path('data') / 'hackathon_prices_dev.csv',
+    "eval_prices": Path('data') / 'hackathon_prices_all.csv',
 }
 
 _log = logging.getLogger(__name__)
@@ -126,6 +127,7 @@ if __name__ == '__main__':
     'rolling_mean_returns'
     'linear_return_predictor'
     'linear_return_independent_assets_lynx'
+    'lynx_baseline'
     
     COVARIANCE MODELS:
     'naive'
@@ -152,7 +154,7 @@ if __name__ == '__main__':
         'cov_window_size': 125,  # half a year
         # try these!
         'hist_window': 150,
-        'future_window': 10,
+        'future_window': 6,
         'vol_window': 100,
         'skip_update_freq': 3,  # skip update position frequency
         'eval': True,
