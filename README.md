@@ -59,7 +59,7 @@ Every day, we recompute the positions of each asset in the portfolio such that t
 (account for slippage). Formally, we do the following. 
 
 Assume there exists $k$ assets. We want to choose our positions (portfolio weights) $w = (w_1, w_2, ..., w_k)$ such that the Sharpe ratio is 
-minimized in each time step, given a predicted future 6-day return and a predicted covariance matrix. Thus, we seek to solve
+maximized in each time step, given a predicted future 6-day return and a predicted covariance matrix. Thus, we seek to solve
 
 $w_t = argmax_{w \in R^k} \frac{r_{t,6}^\top w}{\sqrt{w^\top \hat{\Sigma}_t w}}$.
 
