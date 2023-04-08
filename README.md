@@ -61,7 +61,7 @@ Every day, we recompute the positions of each asset in the portfolio such that t
 Assume there exists $k$ assets. We want to choose our positions (portfolio weights) $w = (w_1, w_2, ..., w_k)$ such that the Sharpe ratio is 
 minimized in each time step, given a predicted future 6-day return and a predicted covariance matrix. Thus, we seek to solve
 
-$w_t = argmin_{w \in R^k} \frac{r_{t,6}^\top w}{\sqrt{w^\top \hat{\Sigma}_t w}}$.
+$w_t = argmax_{w \in R^k} \frac{r_{t,6}^\top w}{\sqrt{w^\top \hat{\Sigma}_t w}}$.
 
 where $r_{t,6}$ is the predicted 6-day return at day $t$, and $\hat{\Sigma}_{t}$ the predicted covariance matrix at time $t$ with linear shrinkage.
 We solve this by numerical optimization. Note that there is no independence assumption on the joint asset returns. 
